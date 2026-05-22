@@ -29,6 +29,8 @@ serve(async (req) => {
       await supabase.from("anime_views").insert({ mal_id: Number(movie_id), title: movie_title });
     } else if (type === "webtoon" && movie_id && movie_title) {
       await supabase.from("webtoon_views").insert({ webtoon_id: String(movie_id), title: movie_title });
+    } else if (type === "drama" && movie_id && movie_title) {
+      await supabase.from("drama_views").insert({ drama_id: String(movie_id), title: movie_title, poster_path: poster_path ?? null });
     }
 
     return new Response(null, { status: 204, headers: CORS });

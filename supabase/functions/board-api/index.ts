@@ -15,7 +15,6 @@ serve(async (req) => {
     Deno.env.get("SUPABASE_URL")!,
     Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!,
   );
-  const ADMIN = Deno.env.get("BOARD_ADMIN_SECRET") ?? "";
 
   try {
     const body   = await req.json();
@@ -23,18 +22,28 @@ serve(async (req) => {
 
     // ── 글 작성 ──────────────────────────────────────────────
     if (action === "create-post") {
-      const { category, title, content, author, password, isNotice, adminSecret } = body;
+      const { category, title, content, author, password, isNotice } = body;
       if (!title?.trim() || !content?.trim() || !author?.trim() || !password)
         return new Response(JSON.stringify({ error: "필수 항목 누락" }), { status: 400, headers: CORS });
 
-      if (isNotice && adminSecret !== ADMIN)
-        return new Response(JSON.stringify({ error: "관리자 인증 실패" }), { status: 403, headers: CORS });
+      if (isNotice) {
+        // 로그인된 관리자 세션 확인
+        const authHeader = req.headers.get("Authorization");
+        if (!authHeader)
+          return new Response(JSON.stringify({ error: "로그인이 필요합니다" }), { headers: CORS });
+        const userSb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+          global: { headers: { Authorization: authHeader } },
+        });
+        const { data: { user } } = await userSb.auth.getUser();
+        if (!user)
+          return new Response(JSON.stringify({ error: "관리자 세션이 만료됐습니다. 다시 로그인하세요." }), { headers: CORS });
+      }
 
       const passwordHash = await hashPw(password);
 
       if (isNotice) {
-        // 공지는 3개 게시판 모두에 저장
-        const rows = (["movie", "anime", "webtoon"] as const).map(cat => ({
+        // 공지는 4개 게시판 모두에 저장
+        const rows = (["movie", "drama", "anime", "webtoon"] as const).map(cat => ({
           category: cat, title: title.trim(), content: content.trim(),
           author: author.trim(), password_hash: passwordHash, is_notice: true,
         }));
@@ -49,6 +58,27 @@ serve(async (req) => {
       }).select("id").single();
       if (error) throw error;
       return new Response(JSON.stringify({ id: data.id }), { headers: CORS });
+    }
+
+    // ── 공지 삭제 (관리자 JWT 인증) ──────────────────────────
+    if (action === "delete-notice") {
+      const { id } = body;
+      const authHeader = req.headers.get("Authorization");
+      if (!authHeader)
+        return new Response(JSON.stringify({ error: "로그인이 필요합니다" }), { headers: CORS });
+      const userSb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, {
+        global: { headers: { Authorization: authHeader } },
+      });
+      const { data: { user } } = await userSb.auth.getUser();
+      if (!user)
+        return new Response(JSON.stringify({ error: "인증 실패" }), { headers: CORS });
+      // 같은 제목/내용의 3개 게시판 공지 모두 삭제
+      const { data: target } = await sb.from("board_posts").select("title,content").eq("id", id).single();
+      if (target) {
+        await sb.from("board_posts").delete()
+          .eq("is_notice", true).eq("title", target.title).eq("content", target.content);
+      }
+      return new Response(JSON.stringify({ ok: true }), { headers: CORS });
     }
 
     // ── 글 삭제 ──────────────────────────────────────────────

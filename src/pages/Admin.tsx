@@ -1,14 +1,14 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2, Edit2, LogOut, Bell, MessageSquare, Database, X, Check, Loader2, BarChart2, Bot, TrendingUp, BookOpen, Search, Pin } from "lucide-react";
+import { Plus, Trash2, LogOut, Bell, MessageSquare, Database, X, Check, Loader2, BarChart2, Bot, TrendingUp, BookOpen, Search, Pin } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import { supabase } from "@/lib/supabase";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { PLATFORMS, Webtoon } from "@/types/webtoon";
 import { cn } from "@/lib/utils";
 
-type Tab = "notices" | "feedbacks" | "cache" | "usage" | "analytics" | "webtoon" | "board";
+type Tab = "notices" | "feedbacks" | "cache" | "usage" | "analytics" | "webtoon";
 
 interface Notice {
   id: string;
@@ -25,7 +25,6 @@ interface Feedback {
 }
 
 interface NoticeForm {
-  id?: string;
   title: string;
   content: string;
 }
@@ -38,6 +37,7 @@ const CACHE_TARGETS = [
   { key: "sentiment", ko: "감성분석 캐시",    en: "Sentiment" },
   { key: "anime",     ko: "애니 캐시",        en: "Anime Caches" },
   { key: "webtoon",   ko: "웹툰 캐시",        en: "Webtoon Caches" },
+  { key: "drama",     ko: "드라마 캐시",      en: "Drama Caches" },
   { key: "all",       ko: "전체 캐시",        en: "All Caches" },
 ];
 
@@ -56,15 +56,19 @@ export default function Admin() {
   const [tab, setTab] = useState<Tab>("notices");
   const [noticeForm, setNoticeForm] = useState<NoticeForm | null>(null);
   const [cacheStatus, setCacheStatus] = useState<Record<string, "idle" | "loading" | "done" | "error">>({});
-  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null); // notice/feedback id pending delete
+  const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
+  const [noticeResult, setNoticeResult] = useState<"success" | "error" | null>(null);
+  const [noticeError, setNoticeError] = useState("");
 
-  // ── 공지사항 조회 ─────────────────────────────────────────────────────────
-  const { data: notices = [], isLoading: noticesLoading } = useQuery<Notice[]>({
+  // ── 공지사항 조회 (board_posts에서) ──────────────────────────────────────
+  const { data: notices = [], isLoading: noticesLoading, refetch: refetchNotices } = useQuery<Notice[]>({
     queryKey: ["admin-notices"],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from("notices")
-        .select("*")
+        .from("board_posts")
+        .select("id,title,content,created_at")
+        .eq("is_notice", true)
+        .eq("category", "movie")
         .order("created_at", { ascending: false });
       if (error) throw error;
       return data;
@@ -86,38 +90,45 @@ export default function Admin() {
     enabled: tab === "feedbacks",
   });
 
-  // ── 공지사항 저장 (생성 / 수정) ────────────────────────────────────────────
-  const saveNotice = useMutation({
-    mutationFn: async (form: NoticeForm) => {
-      if (form.id) {
-        const { error } = await supabase
-          .from("notices")
-          .update({ title: form.title, content: form.content })
-          .eq("id", form.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase
-          .from("notices")
-          .insert({ title: form.title, content: form.content });
-        if (error) throw error;
-      }
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["admin-notices"] });
-      queryClient.invalidateQueries({ queryKey: ["notices"] });
+  // ── 공지사항 저장 (board-api → 3개 게시판 동시 등록) ──────────────────────
+  async function handleSaveNotice(form: NoticeForm) {
+    if (!form.title.trim() || !form.content.trim()) {
+      setNoticeResult("error");
+      setNoticeError(t("모든 항목을 입력해주세요", "Please fill in all fields"));
+      return;
+    }
+    setNoticeResult(null);
+    const { data, error: fnErr } = await supabase.functions.invoke("board-api", {
+      body: {
+        action: "create-post",
+        category: "movie",
+        title: form.title,
+        content: form.content,
+        author: t("관리자", "Admin"),
+        password: "admin-notice",
+        isNotice: true,
+      },
+    });
+    if (fnErr || data?.error) {
+      setNoticeResult("error");
+      setNoticeError(data?.error ?? t("오류가 발생했습니다", "An error occurred"));
+    } else {
+      setNoticeResult("success");
       setNoticeForm(null);
-    },
-  });
+      queryClient.invalidateQueries({ queryKey: ["admin-notices"] });
+    }
+  }
 
-  // ── 공지사항 삭제 ─────────────────────────────────────────────────────────
+  // ── 공지사항 삭제 (board-api → 3개 게시판 동시 삭제) ─────────────────────
   const deleteNotice = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("notices").delete().eq("id", id);
-      if (error) throw error;
+      const { data, error: fnErr } = await supabase.functions.invoke("board-api", {
+        body: { action: "delete-notice", id },
+      });
+      if (fnErr || data?.error) throw new Error(data?.error ?? "삭제 실패");
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-notices"] });
-      queryClient.invalidateQueries({ queryKey: ["notices"] });
       setDeleteConfirm(null);
     },
   });
@@ -165,13 +176,12 @@ export default function Admin() {
       {/* 탭 */}
       <div className="flex flex-wrap bg-slate-800 rounded-lg p-1 gap-1 w-fit">
         {([
-          { key: "notices",   icon: Bell,         ko: "공지사항",    en: "Notices" },
-          { key: "feedbacks", icon: MessageSquare, ko: "피드백",      en: "Feedbacks" },
-          { key: "cache",     icon: Database,      ko: "캐시 관리",   en: "Cache" },
-          { key: "usage",     icon: BarChart2,     ko: "AI 사용량",   en: "AI Usage" },
-          { key: "analytics", icon: TrendingUp,     ko: "방문 통계",   en: "Analytics" },
-          { key: "webtoon",   icon: BookOpen,       ko: "웹툰 관리",   en: "Webtoon" },
-          { key: "board",     icon: Pin,            ko: "게시판 공지", en: "Board Notice" },
+          { key: "notices",   icon: Bell,         ko: "공지사항",  en: "Notices" },
+          { key: "feedbacks", icon: MessageSquare, ko: "피드백",    en: "Feedbacks" },
+          { key: "cache",     icon: Database,      ko: "캐시 관리", en: "Cache" },
+          { key: "usage",     icon: BarChart2,     ko: "AI 사용량", en: "AI Usage" },
+          { key: "analytics", icon: TrendingUp,    ko: "방문 통계", en: "Analytics" },
+          { key: "webtoon",   icon: BookOpen,      ko: "웹툰 관리", en: "Webtoon" },
         ] as const).map(({ key, icon: Icon, ko, en }) => (
           <button
             key={key}
@@ -193,7 +203,7 @@ export default function Admin() {
           <div className="flex justify-between items-center">
             <p className="text-sm text-slate-400">{t(`총 ${notices.length}건`, `${notices.length} notice(s)`)}</p>
             <button
-              onClick={() => setNoticeForm({ title: "", content: "" })}
+              onClick={() => { setNoticeForm({ title: "", content: "" }); setNoticeResult(null); }}
               className="flex items-center gap-2 px-3 py-2 text-sm bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -201,12 +211,10 @@ export default function Admin() {
             </button>
           </div>
 
-          {/* 공지 작성/수정 폼 */}
+          {/* 공지 작성 폼 */}
           {noticeForm !== null && (
             <div className="bg-slate-800 border border-blue-500/50 rounded-xl p-5 space-y-3">
-              <h2 className="text-sm font-bold text-slate-200">
-                {noticeForm.id ? t("공지 수정", "Edit Notice") : t("새 공지 작성", "New Notice")}
-              </h2>
+              <h2 className="text-sm font-bold text-slate-200">{t("새 공지 작성 (3개 게시판 동시 등록)", "New Notice (posted to all 3 boards)")}</h2>
               <input
                 type="text"
                 placeholder={t("제목", "Title")}
@@ -221,27 +229,25 @@ export default function Admin() {
                 onChange={(e) => setNoticeForm((f) => f && { ...f, content: e.target.value })}
                 className="w-full bg-slate-700 border border-slate-600 rounded-lg px-3 py-2 text-sm text-slate-100 resize-none focus:outline-none focus:border-blue-500"
               />
-              {saveNotice.error && (
-                <p className="text-xs text-red-400">{String(saveNotice.error)}</p>
+              {noticeResult === "success" && (
+                <p className="text-xs text-emerald-400 flex items-center gap-1"><Check className="w-3.5 h-3.5" />{t("3개 게시판에 공지가 등록됐습니다.", "Posted to all 3 boards.")}</p>
+              )}
+              {noticeResult === "error" && (
+                <p className="text-xs text-red-400 flex items-center gap-1"><X className="w-3.5 h-3.5" />{noticeError}</p>
               )}
               <div className="flex gap-2 justify-end">
                 <button
-                  onClick={() => setNoticeForm(null)}
+                  onClick={() => { setNoticeForm(null); setNoticeResult(null); }}
                   className="px-4 py-2 text-sm text-slate-400 hover:text-slate-200 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors"
                 >
                   {t("취소", "Cancel")}
                 </button>
                 <button
-                  onClick={() => noticeForm && saveNotice.mutate(noticeForm)}
-                  disabled={saveNotice.isPending || !noticeForm.title.trim() || !noticeForm.content.trim()}
+                  onClick={() => noticeForm && handleSaveNotice(noticeForm)}
                   className="flex items-center gap-2 px-4 py-2 text-sm bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-lg transition-colors"
                 >
-                  {saveNotice.isPending ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : (
-                    <Check className="w-3.5 h-3.5" />
-                  )}
-                  {t("저장", "Save")}
+                  <Pin className="w-3.5 h-3.5" />
+                  {t("전체 게시판에 등록", "Post to All Boards")}
                 </button>
               </div>
             </div>
@@ -290,12 +296,6 @@ export default function Admin() {
                         <p className="text-sm text-slate-400 mt-1 line-clamp-2">{notice.content}</p>
                       </div>
                       <div className="flex gap-1 shrink-0">
-                        <button
-                          onClick={() => setNoticeForm({ id: notice.id, title: notice.title, content: notice.content })}
-                          className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-slate-200 transition-colors"
-                        >
-                          <Edit2 className="w-3.5 h-3.5" />
-                        </button>
                         <button
                           onClick={() => setDeleteConfirm(notice.id)}
                           className="p-2 rounded-lg hover:bg-slate-700 text-slate-400 hover:text-red-400 transition-colors"
@@ -416,9 +416,6 @@ export default function Admin() {
 
       {/* ── 웹툰 플랫폼 관리 탭 ──────────────────────────────────────────────── */}
       {tab === "webtoon" && <WebtoonPlatformTab t={t} />}
-
-      {/* ── 게시판 공지 탭 ────────────────────────────────────────────────────── */}
-      {tab === "board" && <BoardNoticeTab t={t} />}
     </div>
   );
 }
@@ -582,10 +579,11 @@ function UsageTab({ t }: { t: (ko: string, en: string) => string }) {
 
 // ── 방문 통계 컴포넌트 ─────────────────────────────────────────────────────
 interface AnalyticsData {
-  summary: { totalVisits: number; uniqueIPs: number; totalMovieViews: number; totalAnimeViews: number; totalWebtoonViews: number };
+  summary: { totalVisits: number; uniqueIPs: number; totalMovieViews: number; totalDramaViews: number; totalAnimeViews: number; totalWebtoonViews: number };
   dailyVisits: { day: string; count: number }[];
   topIPs: { ip: string; count: number }[];
   topMovies: { movie_id: string; movie_title: string; poster_path: string | null; count: number }[];
+  topDramas: { drama_id: string; title: string; count: number }[];
   topAnime: { mal_id: number; title: string; count: number }[];
   topWebtoons: { webtoon_id: string; title: string; count: number }[];
 }
@@ -620,7 +618,7 @@ function AnalyticsTab({ t }: { t: (ko: string, en: string) => string }) {
     );
   }
 
-  const { summary, dailyVisits, topIPs, topMovies, topAnime, topWebtoons } = data;
+  const { summary, dailyVisits, topIPs, topMovies, topDramas, topAnime, topWebtoons } = data;
   const chartData = dailyVisits.map((d) => ({ day: d.day.slice(5), count: d.count }));
 
   return (
@@ -630,9 +628,10 @@ function AnalyticsTab({ t }: { t: (ko: string, en: string) => string }) {
         {[
           { label: t("총 방문 수 (30일)", "Total Visits (30d)"),      value: summary.totalVisits.toLocaleString(),              color: "text-purple-400" },
           { label: t("고유 IP (30일)", "Unique IPs (30d)"),           value: summary.uniqueIPs.toLocaleString(),                color: "text-slate-100"  },
-          { label: t("영화 조회 수 (30일)", "Movie Views (30d)"),     value: summary.totalMovieViews.toLocaleString(),          color: "text-blue-400"   },
-          { label: t("애니 조회 수 (30일)", "Anime Views (30d)"),     value: summary.totalAnimeViews.toLocaleString(),          color: "text-pink-400"   },
-          { label: t("웹툰 조회 수 (30일)", "Webtoon Views (30d)"),   value: (summary.totalWebtoonViews ?? 0).toLocaleString(), color: "text-green-400"  },
+          { label: t("영화 조회 수 (30일)", "Movie Views (30d)"),     value: summary.totalMovieViews.toLocaleString(),             color: "text-blue-400"   },
+          { label: t("드라마 조회 수 (30일)", "Drama Views (30d)"),   value: (summary.totalDramaViews ?? 0).toLocaleString(),      color: "text-indigo-400" },
+          { label: t("애니 조회 수 (30일)", "Anime Views (30d)"),     value: summary.totalAnimeViews.toLocaleString(),             color: "text-pink-400"   },
+          { label: t("웹툰 조회 수 (30일)", "Webtoon Views (30d)"),   value: (summary.totalWebtoonViews ?? 0).toLocaleString(),    color: "text-green-400"  },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-slate-800 rounded-xl p-4">
             <p className="text-xs text-slate-500 mb-1">{label}</p>
@@ -671,16 +670,29 @@ function AnalyticsTab({ t }: { t: (ko: string, en: string) => string }) {
           {topIPs.length === 0 ? (
             <p className="text-center py-6 text-slate-500 text-xs">{t("데이터 없음", "No data")}</p>
           ) : (
-            <div className="divide-y divide-slate-700">
-              {topIPs.map((item, i) => (
-                <div key={item.ip} className="flex items-center justify-between px-4 py-2.5">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs text-slate-500 w-4 shrink-0">{i + 1}</span>
-                    <span className="text-xs text-slate-300 font-mono truncate">{item.ip}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-700">
+              <div className="divide-y divide-slate-700">
+                {topIPs.slice(0, 5).map((item, i) => (
+                  <div key={item.ip} className="flex items-center justify-between px-4 py-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs text-slate-500 w-4 shrink-0">{i + 1}</span>
+                      <span className="text-xs text-slate-300 font-mono truncate">{item.ip}</span>
+                    </div>
+                    <span className="text-xs font-medium text-purple-400 shrink-0 ml-2">{item.count.toLocaleString()}</span>
                   </div>
-                  <span className="text-xs font-medium text-purple-400 shrink-0 ml-2">{item.count.toLocaleString()}</span>
-                </div>
-              ))}
+                ))}
+              </div>
+              <div className="divide-y divide-slate-700">
+                {topIPs.slice(5).map((item, i) => (
+                  <div key={item.ip} className="flex items-center justify-between px-4 py-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs text-slate-500 w-4 shrink-0">{i + 6}</span>
+                      <span className="text-xs text-slate-300 font-mono truncate">{item.ip}</span>
+                    </div>
+                    <span className="text-xs font-medium text-purple-400 shrink-0 ml-2">{item.count.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -693,19 +705,67 @@ function AnalyticsTab({ t }: { t: (ko: string, en: string) => string }) {
           {topMovies.length === 0 ? (
             <p className="text-center py-6 text-slate-500 text-xs">{t("데이터 없음", "No data")}</p>
           ) : (
-            <div className="divide-y divide-slate-700">
-              {topMovies.map((item, i) => (
-                <div key={item.movie_id} className="flex items-center justify-between px-4 py-2.5">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-xs text-slate-500 w-4 shrink-0">{i + 1}</span>
-                    <span className="text-xs text-slate-300 truncate">{item.movie_title}</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-700">
+              <div className="divide-y divide-slate-700">
+                {topMovies.slice(0, 5).map((item, i) => (
+                  <div key={item.movie_id} className="flex items-center justify-between px-4 py-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs text-slate-500 w-4 shrink-0">{i + 1}</span>
+                      <span className="text-xs text-slate-300 truncate">{item.movie_title}</span>
+                    </div>
+                    <span className="text-xs font-medium text-blue-400 shrink-0 ml-2">{item.count.toLocaleString()}</span>
                   </div>
-                  <span className="text-xs font-medium text-blue-400 shrink-0 ml-2">{item.count.toLocaleString()}</span>
-                </div>
-              ))}
+                ))}
+              </div>
+              <div className="divide-y divide-slate-700">
+                {topMovies.slice(5).map((item, i) => (
+                  <div key={item.movie_id} className="flex items-center justify-between px-4 py-2.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-xs text-slate-500 w-4 shrink-0">{i + 6}</span>
+                      <span className="text-xs text-slate-300 truncate">{item.movie_title}</span>
+                    </div>
+                    <span className="text-xs font-medium text-blue-400 shrink-0 ml-2">{item.count.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
             </div>
           )}
         </div>
+      </div>
+
+      {/* 드라마 조회 TOP 10 */}
+      <div className="bg-slate-800 rounded-xl overflow-hidden">
+        <p className="text-xs font-semibold text-slate-400 px-4 py-3 border-b border-slate-700">
+          {t("드라마 조회 TOP 10 (30일)", "Top Dramas (30d)")}
+        </p>
+        {topDramas.length === 0 ? (
+          <p className="text-center py-6 text-slate-500 text-xs">{t("데이터 없음", "No data")}</p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 divide-y sm:divide-y-0 sm:divide-x divide-slate-700">
+            <div className="divide-y divide-slate-700">
+              {topDramas.slice(0, 5).map((item, i) => (
+                <div key={item.drama_id} className="flex items-center justify-between px-4 py-2.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs text-slate-500 w-4 shrink-0">{i + 1}</span>
+                    <span className="text-xs text-slate-300 truncate">{item.title}</span>
+                  </div>
+                  <span className="text-xs font-medium text-indigo-400 shrink-0 ml-2">{item.count.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+            <div className="divide-y divide-slate-700">
+              {topDramas.slice(5, 10).map((item, i) => (
+                <div key={item.drama_id} className="flex items-center justify-between px-4 py-2.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs text-slate-500 w-4 shrink-0">{i + 6}</span>
+                    <span className="text-xs text-slate-300 truncate">{item.title}</span>
+                  </div>
+                  <span className="text-xs font-medium text-indigo-400 shrink-0 ml-2">{item.count.toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* 애니 조회 TOP 10 */}
@@ -1026,95 +1086,3 @@ function WebtoonPlatformTab({ t }: { t: (ko: string, en: string) => string }) {
   );
 }
 
-// ── 게시판 공지 컴포넌트 ───────────────────────────────────────────────────
-function BoardNoticeTab({ t }: { t: (ko: string, en: string) => string }) {
-  const [title, setTitle]             = useState("");
-  const [content, setContent]         = useState("");
-  const [adminSecret, setAdminSecret] = useState("");
-  const [loading, setLoading]         = useState(false);
-  const [result, setResult]           = useState<"success" | "error" | null>(null);
-  const [errorMsg, setErrorMsg]       = useState("");
-
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!title.trim() || !content.trim() || !adminSecret) {
-      setResult("error");
-      setErrorMsg(t("모든 항목을 입력해주세요", "Please fill in all fields"));
-      return;
-    }
-    setLoading(true);
-    setResult(null);
-    try {
-      const { data, error: fnErr } = await supabase.functions.invoke("board-api", {
-        body: {
-          action: "create-post",
-          category: "movie",
-          title,
-          content,
-          author: t("관리자", "Admin"),
-          password: adminSecret,
-          isNotice: true,
-          adminSecret,
-        },
-      });
-      if (fnErr || data?.error) {
-        setResult("error");
-        setErrorMsg(data?.error ?? t("오류가 발생했습니다", "An error occurred"));
-      } else {
-        setResult("success");
-        setTitle("");
-        setContent("");
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      <p className="text-sm text-slate-400">
-        {t(
-          "작성한 공지는 영화·애니·웹툰 3개 게시판 모두에 상단 고정됩니다.",
-          "Notice will be pinned at the top of all 3 boards."
-        )}
-      </p>
-      <form onSubmit={handleSubmit} className="space-y-3">
-        <input
-          value={title} onChange={e => setTitle(e.target.value)}
-          placeholder={t("공지 제목", "Notice title")}
-          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
-        />
-        <textarea
-          value={content} onChange={e => setContent(e.target.value)}
-          placeholder={t("공지 내용을 입력하세요", "Enter notice content")}
-          rows={8}
-          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors resize-none"
-        />
-        <input
-          type="password" value={adminSecret} onChange={e => setAdminSecret(e.target.value)}
-          placeholder={t("관리자 코드 (BOARD_ADMIN_SECRET)", "Admin code (BOARD_ADMIN_SECRET)")}
-          className="w-full bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-slate-100 placeholder-slate-500 focus:outline-none focus:border-blue-500 transition-colors"
-        />
-        {result === "success" && (
-          <div className="flex items-center gap-2 px-4 py-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-emerald-400 text-sm">
-            <Check className="w-4 h-4 shrink-0" />
-            {t("3개 게시판에 공지가 등록됐습니다.", "Notice posted to all 3 boards.")}
-          </div>
-        )}
-        {result === "error" && (
-          <div className="flex items-center gap-2 px-4 py-3 bg-red-500/10 border border-red-500/30 rounded-xl text-red-400 text-sm">
-            <X className="w-4 h-4 shrink-0" />
-            {errorMsg}
-          </div>
-        )}
-        <button
-          type="submit" disabled={loading}
-          className="w-full flex items-center justify-center gap-2 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium rounded-xl transition-colors"
-        >
-          {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Pin className="w-4 h-4" />}
-          {loading ? t("등록 중...", "Posting...") : t("전체 게시판에 공지 등록", "Post Notice to All Boards")}
-        </button>
-      </form>
-    </div>
-  );
-}

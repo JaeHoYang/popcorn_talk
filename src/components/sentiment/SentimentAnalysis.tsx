@@ -9,7 +9,7 @@ import EmptyState from "@/components/common/EmptyState";
 interface Props {
   movieId: number | string;
   movieTitle: string;
-  type?: "movie" | "anime" | "webtoon";
+  type?: "movie" | "anime" | "webtoon" | "drama";
 }
 
 export default function SentimentAnalysis({ movieId, movieTitle, type = "movie" }: Props) {

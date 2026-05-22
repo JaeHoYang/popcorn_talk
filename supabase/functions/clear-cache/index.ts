@@ -15,6 +15,9 @@ const TARGET_TABLES: Record<string, TableEntry[]> = {
     { table: "popular_anime_cache",   filterCol: "expires_at" },
     { table: "anime_sentiment_cache", filterCol: "expires_at" },
   ],
+  drama:     [
+    { table: "drama_sentiment_cache", filterCol: "expires_at" },
+  ],
   all: [
     { table: "popular_movies_cache",  filterCol: "created_at" },
     { table: "movie_cache",           filterCol: "created_at" },
@@ -24,6 +27,7 @@ const TARGET_TABLES: Record<string, TableEntry[]> = {
     { table: "anime_cache",           filterCol: "expires_at" },
     { table: "popular_anime_cache",   filterCol: "expires_at" },
     { table: "anime_sentiment_cache", filterCol: "expires_at" },
+    { table: "drama_sentiment_cache", filterCol: "expires_at" },
   ],
 };
 

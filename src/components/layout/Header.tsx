@@ -8,15 +8,23 @@ import { cn } from "@/lib/utils";
 const MOVIE_NAV = [
   { path: "/",          ko: "홈",        en: "Home" },
   { path: "/boxoffice", ko: "박스오피스", en: "Box Office" },
-  { path: "/board",   ko: "게시판",  en: "Board" },
+  { path: "/board",     ko: "게시판",    en: "Board" },
   { path: "/about",     ko: "소개",      en: "About" },
   { path: "/admin",     ko: "관리자",    en: "Admin" },
+];
+
+const DRAMA_NAV = [
+  { path: "/drama",         ko: "홈",     en: "Home" },
+  { path: "/drama/ranking", ko: "순위",   en: "Ranking" },
+  { path: "/drama/board",   ko: "게시판", en: "Board" },
+  { path: "/drama/about",   ko: "소개",   en: "About" },
+  { path: "/drama/admin",   ko: "관리자", en: "Admin" },
 ];
 
 const ANIME_NAV = [
   { path: "/anime",         ko: "홈",       en: "Home" },
   { path: "/anime/ranking", ko: "순위",     en: "Ranking" },
-  { path: "/anime/board", ko: "게시판", en: "Board" },
+  { path: "/anime/board",   ko: "게시판",   en: "Board" },
   { path: "/anime/about",   ko: "소개",     en: "About" },
   { path: "/anime/admin",   ko: "관리자",   en: "Admin" },
 ];
@@ -24,7 +32,7 @@ const ANIME_NAV = [
 const WEBTOON_NAV = [
   { path: "/webtoon",         ko: "홈",       en: "Home" },
   { path: "/webtoon/ranking", ko: "순위",     en: "Ranking" },
-  { path: "/webtoon/board", ko: "게시판", en: "Board" },
+  { path: "/webtoon/board",   ko: "게시판",   en: "Board" },
   { path: "/webtoon/about",   ko: "소개",     en: "About" },
   { path: "/webtoon/admin",   ko: "관리자",   en: "Admin" },
 ];
@@ -36,23 +44,26 @@ export default function Header() {
 
   const [menuOpen, setMenuOpen] = useState(false);
 
+  const isDrama   = location.pathname.startsWith("/drama");
   const isAnime   = location.pathname.startsWith("/anime");
   const isWebtoon = location.pathname.startsWith("/webtoon");
-  const navItems  = isWebtoon ? WEBTOON_NAV : isAnime ? ANIME_NAV : MOVIE_NAV;
+  const navItems  = isDrama ? DRAMA_NAV : isWebtoon ? WEBTOON_NAV : isAnime ? ANIME_NAV : MOVIE_NAV;
 
-  const logoText  = isWebtoon ? "Toon Talk" : isAnime ? "Anime Talk" : "Popcorn Talk";
-  const logoIcon  = isWebtoon
-    ? <BookOpen className="w-6 h-6 text-green-400" />
-    : isAnime
-      ? <Tv className="w-6 h-6 text-purple-400" />
-      : <Film className="w-6 h-6 text-blue-400" />;
-  const logoPath  = isWebtoon ? "/webtoon" : isAnime ? "/anime" : "/";
+  const logoText  = isDrama ? "SeriesTalk" : isWebtoon ? "Toon Talk" : isAnime ? "Anime Talk" : "Popcorn Talk";
+  const logoIcon  = isDrama
+    ? <Tv className="w-6 h-6 text-blue-400" />
+    : isWebtoon
+      ? <BookOpen className="w-6 h-6 text-green-400" />
+      : isAnime
+        ? <Tv className="w-6 h-6 text-purple-400" />
+        : <Film className="w-6 h-6 text-blue-400" />;
+  const logoPath  = isDrama ? "/drama" : isWebtoon ? "/webtoon" : isAnime ? "/anime" : "/";
 
   // 라우트 변경 시 메뉴 닫기
   useEffect(() => { setMenuOpen(false); }, [location.pathname]);
 
   function isActive(path: string) {
-    if (path === "/" || path === "/anime" || path === "/webtoon") return location.pathname === path;
+    if (path === "/" || path === "/anime" || path === "/drama" || path === "/webtoon") return location.pathname === path;
     return location.pathname.startsWith(path);
   }
 
@@ -65,13 +76,25 @@ export default function Header() {
             to="/"
             className={cn(
               "flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-t-md transition-colors",
-              !isAnime && !isWebtoon
+              !isDrama && !isAnime && !isWebtoon
                 ? "bg-slate-800 text-white border-b-2 border-blue-400"
                 : "text-slate-400 hover:text-white hover:bg-slate-800/50"
             )}
           >
             <Film className="w-4 h-4" />
             {t("영화", "Movies")}
+          </Link>
+          <Link
+            to="/drama"
+            className={cn(
+              "flex items-center gap-1.5 px-4 py-2 text-sm font-medium rounded-t-md transition-colors",
+              isDrama
+                ? "bg-slate-800 text-white border-b-2 border-blue-400"
+                : "text-slate-400 hover:text-white hover:bg-slate-800/50"
+            )}
+          >
+            <Tv className="w-4 h-4" />
+            {t("드라마", "Drama")}
           </Link>
           <Link
             to="/anime"
@@ -107,7 +130,7 @@ export default function Header() {
           >
             {logoIcon}
             <span>{logoText}</span>
-            <span className="text-xs text-slate-500 font-normal hidden sm:inline">v1.3.0</span>
+            <span className="text-xs text-slate-500 font-normal hidden sm:inline">v1.4.1</span>
           </Link>
 
           <nav className="hidden md:flex items-center gap-1 mx-4">

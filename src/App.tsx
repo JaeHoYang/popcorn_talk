@@ -20,6 +20,11 @@ import AnimeDetail from "@/pages/AnimeDetail";
 import AnimeSearch from "@/pages/AnimeSearch";
 import AnimeRanking from "@/pages/AnimeRanking";
 import AnimeGenre from "@/pages/AnimeGenre";
+import DramaHome from "@/pages/DramaHome";
+import DramaSearch from "@/pages/DramaSearch";
+import DramaRanking from "@/pages/DramaRanking";
+import DramaDetail from "@/pages/DramaDetail";
+import DramaAbout from "@/pages/DramaAbout";
 import MoviesPopular from "@/pages/MoviesPopular";
 import MoviesGenre from "@/pages/MoviesGenre";
 import WebtoonHome from "@/pages/WebtoonHome";
@@ -62,6 +67,22 @@ export default function App() {
                   <Route path="/boxoffice"      element={<Boxoffice />} />
                   <Route path="/movies/popular" element={<MoviesPopular />} />
                   <Route path="/movies/genre"   element={<MoviesGenre />} />
+                  <Route path="/drama"          element={<DramaHome />} />
+                  <Route path="/drama/ranking" element={<DramaRanking />} />
+                  <Route path="/drama/search"  element={<DramaSearch />} />
+                  <Route path="/drama/about"   element={<DramaAbout />} />
+                  <Route path="/drama/notices" element={<Notices />} />
+                  <Route path="/drama/board"   element={<Board />} />
+                  <Route path="/drama/board/:id" element={<BoardPostDetail />} />
+                  <Route
+                    path="/drama/admin"
+                    element={
+                      <ProtectedRoute>
+                        <Admin />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route path="/drama/:id"     element={<DramaDetail />} />
                   <Route path="/anime"          element={<AnimeHome />} />
                   <Route path="/anime/ranking"  element={<AnimeRanking />} />
                   <Route path="/anime/search"   element={<AnimeSearch />} />

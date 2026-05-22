@@ -6,6 +6,13 @@ import { SentimentJob, SentimentResult } from "@/types/sentiment";
 type AnalysisState = "idle" | "fake-loading" | "starting" | "polling" | "done" | "error";
 
 const POLL_INTERVAL_MS = 2000;
+
+const SENTIMENT_CONFIG: Record<string, { startFn: string; workerFn: string; idKey: string }> = {
+  drama:   { startFn: "analyze-drama-start",  workerFn: "analyze-drama-worker",  idKey: "drama_id"  },
+  anime:   { startFn: "analyze-anime-start",  workerFn: "analyze-anime-worker",  idKey: "mal_id"    },
+  movie:   { startFn: "analyze-start",        workerFn: "analyze-worker",        idKey: "movie_id"  },
+  webtoon: { startFn: "analyze-start",        workerFn: "analyze-worker",        idKey: "movie_id"  },
+};
 const MAX_POLL_MS = 180_000;
 const FAKE_LOAD_MS = 800;
 
@@ -13,7 +20,7 @@ export function useSentimentAnalysis(
   movieId: number | string,
   movieTitle: string,
   uiLanguage: string,
-  type: "movie" | "anime" | "webtoon" = "movie"
+  type: "movie" | "anime" | "webtoon" | "drama" = "movie"
 ) {
   const [state, setState] = useState<AnalysisState>("idle");
   const [progress, setProgress] = useState(0);
@@ -68,22 +75,16 @@ export function useSentimentAnalysis(
       setStageMessage("분석을 시작합니다...");
 
       try {
-        const isAnime = type === "anime";
-        const startFn = isAnime ? "analyze-anime-start" : "analyze-start";
-        const workerFn = isAnime ? "analyze-anime-worker" : "analyze-worker";
-        const startBody = isAnime
-          ? { mal_id: movieId, title: movieTitle, ui_language: uiLanguage, force_refresh: forceRefresh }
-          : { movie_id: movieId, title: movieTitle, ui_language: uiLanguage, force_refresh: forceRefresh };
+        const cfg = SENTIMENT_CONFIG[type] ?? SENTIMENT_CONFIG.movie;
+        const startBody = { [cfg.idKey]: movieId, title: movieTitle, ui_language: uiLanguage, force_refresh: forceRefresh };
 
-        const { data, error } = await supabase.functions.invoke(startFn, { body: startBody });
+        const { data, error } = await supabase.functions.invoke(cfg.startFn, { body: startBody });
         if (error || !data?.job_id) throw new Error(error?.message ?? "Failed to start analysis");
 
         const jobId: string = data.job_id;
 
-        const workerBody = isAnime
-          ? { job_id: jobId, mal_id: movieId, title: movieTitle, ui_language: uiLanguage }
-          : { job_id: jobId, movie_id: movieId, title: movieTitle, ui_language: uiLanguage };
-        supabase.functions.invoke(workerFn, { body: workerBody }).catch(() => {});
+        const workerBody = { job_id: jobId, [cfg.idKey]: movieId, title: movieTitle, ui_language: uiLanguage };
+        supabase.functions.invoke(cfg.workerFn, { body: workerBody }).catch(() => {});
 
         setState("polling");
 

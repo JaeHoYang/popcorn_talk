@@ -58,9 +58,10 @@ serve(async (req) => {
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
-    // 영화 / 애니 / 웹툰 조회 TOP 10 (30일) — 병렬
-    const [{ data: movieRows }, { data: animeRows }, { data: webtoonRows }] = await Promise.all([
+    // 영화 / 드라마 / 애니 / 웹툰 조회 TOP 10 (30일) — 병렬
+    const [{ data: movieRows }, { data: dramaRows }, { data: animeRows }, { data: webtoonRows }] = await Promise.all([
       supabase.from("movie_views").select("movie_id, movie_title, poster_path").gte("created_at", since30),
+      supabase.from("drama_views").select("drama_id, title").gte("created_at", since30),
       supabase.from("anime_views").select("mal_id, title").gte("created_at", since30),
       supabase.from("webtoon_views").select("webtoon_id, title").gte("created_at", since30),
     ]);
@@ -75,6 +76,19 @@ serve(async (req) => {
       }
     }
     const topMovies = Array.from(movieMap.values())
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    const dramaMap = new Map<string, { drama_id: string; title: string; count: number }>();
+    for (const row of dramaRows ?? []) {
+      const existing = dramaMap.get(row.drama_id);
+      if (existing) {
+        existing.count++;
+      } else {
+        dramaMap.set(row.drama_id, { drama_id: row.drama_id, title: row.title, count: 1 });
+      }
+    }
+    const topDramas = Array.from(dramaMap.values())
       .sort((a, b) => b.count - a.count)
       .slice(0, 10);
 
@@ -109,12 +123,14 @@ serve(async (req) => {
         totalVisits,
         uniqueIPs,
         totalMovieViews: movieRows?.length ?? 0,
+        totalDramaViews: dramaRows?.length ?? 0,
         totalAnimeViews: animeRows?.length ?? 0,
         totalWebtoonViews: webtoonRows?.length ?? 0,
       },
       dailyVisits,
       topIPs,
       topMovies,
+      topDramas,
       topAnime,
       topWebtoons,
     }), { headers: CORS });

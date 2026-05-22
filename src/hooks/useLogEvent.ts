@@ -23,5 +23,11 @@ export function useLogEvent() {
     }).catch(() => {});
   }
 
-  return { logPage, logMovie, logAnime, logWebtoon };
+  function logDrama(id: number | string, title: string, poster_path?: string | null) {
+    supabase.functions.invoke("log-event", {
+      body: { type: "drama", movie_id: String(id), movie_title: title, poster_path: poster_path ?? null },
+    }).catch(() => {});
+  }
+
+  return { logPage, logMovie, logAnime, logWebtoon, logDrama };
 }

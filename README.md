@@ -1,6 +1,6 @@
 # Movie Pulse 🎬
 
-영화 · 애니 · 웹툰을 한 곳에서 탐색하고, 박스오피스 순위와 AI 감성 분석까지 제공하는 엔터테인먼트 정보 서비스입니다.
+영화 · 드라마 · 애니 · 웹툰을 한 곳에서 탐색하고, 박스오피스 순위와 AI 감성 분석까지 제공하는 엔터테인먼트 정보 서비스입니다.
 
 ## 주요 기능
 
@@ -9,6 +9,13 @@
 - 상세 정보 (출연진, OTT 제공 플랫폼, 유사 추천작, 시리즈 컬렉션)
 - AI 기반 관람객 리뷰 감성 분석 (Claude API)
 - KOBIS 박스오피스: 일별 / 주간 / 월간 포스터 그리드
+
+### 📺 드라마 (SeriesTalk)
+- 국가별(한국·미국·일본·영국·중국·태국) 인기 드라마 탐색
+- 인기 / 평점 / 최신 / 방영중 / 방영예정 / 종료 필터
+- 장르 · 방영연도 · 최소 평점 고급 필터
+- 상세 정보 (출연진, OTT, 시즌 목록, 추천 드라마)
+- AI 기반 감성 분석
 
 ### ✨ 애니
 - 애니 검색 및 인기 순위
@@ -21,12 +28,12 @@
 - 상세 정보 및 유사 웹툰 추천
 
 ### 💬 게시판
-- 영화 · 애니 · 웹툰 전용 게시판
+- 영화 · 드라마 · 애니 · 웹툰 전용 게시판
 - 닉네임 + 비밀번호 기반 익명 게시 / 댓글
-- 관리자 공지 (3개 게시판 동시 등록)
+- 관리자 공지 (4개 게시판 동시 등록)
 
 ### 📊 관리자
-- 방문 통계 (영화 · 애니 · 웹툰 조회수)
+- 방문 통계 (영화 · 드라마 · 애니 · 웹툰 조회수)
 - AI 분석 사용량 모니터링
 - 공지 작성 및 캐시 초기화
 
@@ -39,7 +46,7 @@
 | Frontend | React 18, TypeScript, Vite, Tailwind CSS |
 | Backend | Supabase (PostgreSQL, Edge Functions) |
 | AI | Claude API (Anthropic) |
-| 외부 API | TMDB (영화), AniList (애니), MangaDex (웹툰), KOBIS (박스오피스) |
+| 외부 API | TMDB (영화·드라마), AniList (애니), MangaDex (웹툰), KOBIS (박스오피스) |
 | 배포 | Vercel |
 
 ---
@@ -70,6 +77,12 @@ lovable/
 | `popular-movies` | 인기 영화 목록 |
 | `discover-movies` | 장르별 영화 탐색 |
 | `get-boxoffice` | KOBIS 박스오피스 (일별/주간/월간) |
+| `search-drama` | 드라마 검색 (TMDB) |
+| `popular-drama` | 인기 드라마 |
+| `get-drama-ranking` | 드라마 순위 (필터·국가·고급 필터) |
+| `get-drama-detail` | 드라마 상세 |
+| `analyze-drama-start` | 드라마 감성 분석 시작 |
+| `analyze-drama-worker` | 드라마 감성 분석 워커 |
 | `search-anime` | 애니 검색 (AniList) |
 | `popular-anime` | 인기 애니 |
 | `anime-airing` | 방영 중 애니 |
@@ -152,7 +165,7 @@ npm run dev
 - **Minor (1.x.0)**: 영화 · 애니 · 웹툰 등 카테고리 단위 기능 추가
 - **Patch (1.0.x)**: 버그 수정 및 소규모 개선
 
-현재 버전: **v1.3.0**
+현재 버전: **v1.4.1**
 
 ---
 

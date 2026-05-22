@@ -34,7 +34,7 @@ class SentimentErrorBoundary extends Component<
 interface Props {
   movieId: number | string;
   movieTitle: string;
-  type?: "movie" | "anime" | "webtoon";
+  type?: "movie" | "anime" | "webtoon" | "drama";
 }
 
 export default function SentimentPanel({ movieId, movieTitle, type = "movie" }: Props) {
