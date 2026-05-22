@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect width="64" height="64" rx="12" fill="#0a0e1a"/>
+  <!-- Film strip sides -->
+  <rect x="4" y="8" width="8" height="48" rx="2" fill="#1e293b"/>
+  <rect x="52" y="8" width="8" height="48" rx="2" fill="#1e293b"/>
+  <!-- Film holes left -->
+  <rect x="6" y="12" width="4" height="4" rx="1" fill="#0a0e1a"/>
+  <rect x="6" y="22" width="4" height="4" rx="1" fill="#0a0e1a"/>
+  <rect x="6" y="32" width="4" height="4" rx="1" fill="#0a0e1a"/>
+  <rect x="6" y="42" width="4" height="4" rx="1" fill="#0a0e1a"/>
+  <!-- Film holes right -->
+  <rect x="54" y="12" width="4" height="4" rx="1" fill="#0a0e1a"/>
+  <rect x="54" y="22" width="4" height="4" rx="1" fill="#0a0e1a"/>
+  <rect x="54" y="32" width="4" height="4" rx="1" fill="#0a0e1a"/>
+  <rect x="54" y="42" width="4" height="4" rx="1" fill="#0a0e1a"/>
+  <!-- Pulse line -->
+  <polyline points="14,32 20,32 23,20 27,44 31,28 35,36 39,32 50,32" stroke="#3b82f6" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</svg>

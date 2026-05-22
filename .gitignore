@@ -1,0 +1,33 @@
+# 문서
+docs/
+
+# 환경 변수
+.env
+.env.local
+.env.*.local
+
+# 빌드 결과물
+dist/
+dist-ssr/
+
+# 의존성
+node_modules/
+
+# 에디터
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 로그
+*.log
+npm-debug.log*
+
+.vercel
